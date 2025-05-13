@@ -1,8 +1,8 @@
 document.addEventListener("DOMContentLoaded", function () {
     // Define the searchItem function
     function searchItem() {
-        const itemName = document.getElementById("itemInput").value; // Get item name from the input
-        const fileInput = document.getElementById("fileInput"); // Get file input
+        const itemName = document.getElementById("itemInput").value.trim(); // Trim to avoid blank spaces
+        const fileInput = document.getElementById("fileInput");
 
         if (!itemName || !fileInput.files[0]) {
             alert("Please enter an item name and select a file.");
@@ -13,8 +13,8 @@ document.addEventListener("DOMContentLoaded", function () {
         formData.append('item_name', itemName);
         formData.append('file', fileInput.files[0]);
 
-        // Sending the request to the Flask server
-        fetch('http://127.0.0.1:5000/search', {
+        // Use a relative path to work on both local and Fly.io
+        fetch('/search', {
             method: 'POST',
             body: formData
         })
@@ -25,7 +25,6 @@ document.addEventListener("DOMContentLoaded", function () {
             return response.json();
         })
         .then(data => {
-            // Process and display search results
             const tableBody = document.querySelector("#resultsTable tbody");
             tableBody.innerHTML = '';  // Clear previous results
 
@@ -34,7 +33,6 @@ document.addEventListener("DOMContentLoaded", function () {
             } else if (data.length === 0) {
                 alert('No items found.');
             } else {
-                // Populate the table with results
                 data.forEach(result => {
                     const row = document.createElement('tr');
                     row.innerHTML = `
@@ -47,13 +45,17 @@ document.addEventListener("DOMContentLoaded", function () {
             }
         })
         .catch(error => {
-            console.error('Error:', error);
-            alert('There was an error with the search request. Please check the console for more details.');
+            console.error('Search request failed:', error);
+            alert('There was an error with the search request. Please check your internet connection or try again later.');
         });
     }
 
     // Attach the searchItem function to the button
-    const searchButton = document.querySelector("button");
-    searchButton.addEventListener("click", searchItem);
+    const searchButton = document.getElementById("searchButton");
+    if (searchButton) {
+        searchButton.addEventListener("click", searchItem);
+    } else {
+        console.error("Search button not found.");
+    }
 });
 

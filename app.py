@@ -7,76 +7,98 @@ import pandas as pd
 import re
 import json
 
+app = Flask(__name__, static_url_path='/static', static_folder='static')
+# Enable CORS for your frontend domains
+CORS(app, supports_credentials=True, origins=["https://foodlens.fly.dev", "http://localhost:5000"])
 
 
+app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))  # Replace with secure random value
 
+REGISTRATION_CODE = os.environ.get("REGISTRATION_CODE") 
+os.environ.get("REGISTRATION_CODE")
 
-
-
-app = Flask(__name__)
-CORS(app, supports_credentials=True)
-app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))
-  # Replace with secure random value
-  
-REGISTRATION_CODE = os.environ.get("REGISTRATION_CODE")  
 
 # In-memory user "database"
 users = {}
 
 
+@app.route("/")
+def home():
+    return render_template('index.html')
+
+# @app.route('/login-page')
+# def login_page():
+#    return render_template('index.html')  # Make sure 'login.html' exists in your 'templates' folder
+
+@app.route('/register', methods=['GET'])
+def show_register():
+    return render_template('register.html')  # Ensure this matches the file name exactly
 
 
-@app.route('/login-page')
-def login_page():
-    return render_template('login.html')
-
-
-
+    
 @app.route('/register', methods=['POST'])
 def register():
-    data = request.json
+    # Parse JSON from the request
+    try:
+        data = request.get_json(force=True)
+    except Exception as e:
+        print("❌ Failed to parse JSON:", e)
+        return jsonify({"error": "Invalid JSON payload"}), 400
+
+    if not data:
+        return jsonify({"error": "Missing data"}), 400
+
+    # Get the required fields from the data
     username = data.get('username')
     password = data.get('password')
-    reg_code = data.get('reg_code')
+    reg_code = data.get('reg_code')  
 
-    print(f"Received registration code: {reg_code}")  # Debugging line
-    print("Received registration code from user:", reg_code)
-    print("Expected registration code from env:", os.environ.get("REGISTRATION_CODE"))
+    # Get the expected registration code from the environment variable
+    expected_code = os.environ.get("REGISTRATION_CODE")
+    if not expected_code:
+        return jsonify({"error": "Registration is closed. No valid registration code."}), 403
 
-
-    if reg_code != os.environ.get("REGISTRATION_CODE"):
+    # Check if the supplied registration code matches the expected code
+    if reg_code != expected_code:
+        print(f"❌ Invalid registration code: {reg_code}")
         return jsonify({"error": "Invalid registration code"}), 403
 
+    # Check if the username already exists
     if username in users:
         return jsonify({"error": "User already exists"}), 400
 
+    # Add the new user and hash the password
     users[username] = generate_password_hash(password)
-    save_users(users)
-    return jsonify({"message": "User registered successfully"})
+    save_users(users)  # Ensure this function is defined and works as expected
 
+    return jsonify({"message": "User registered successfully"})
 
 
 
 
 @app.route('/login', methods=['POST'])
 def login():
-    data = request.json
-    username = data.get('username')
-    password = data.get('password')
+    try:
+        data = request.json
+        username = data.get('username')
+        password = data.get('password')
 
-    stored_password_hash = users.get(username)
-    if not stored_password_hash or not check_password_hash(stored_password_hash, password):
-        return jsonify({"error": "Invalid credentials"}), 401
+        if not username or not password:
+            return jsonify({"error": "Missing username or password"}), 400
 
-    session['username'] = username
-    return jsonify({"message": f"Welcome {username}!"})
+        stored_password_hash = users.get(username)
+        if not stored_password_hash or not check_password_hash(stored_password_hash, password):
+            return jsonify({"error": "Invalid credentials"}), 401
 
+        session['username'] = username
+        return jsonify({"message": f"Welcome {username}!"})
+    except Exception as e:
+        return jsonify({"error": f"An error occurred: {str(e)}"}), 500
 
 @app.route('/logout', methods=['POST'])
 def logout():
     session.pop('username', None)
     return jsonify({"message": "Logged out"})
-
 
 @app.route('/whoami', methods=['GET'])
 def whoami():
@@ -85,16 +107,19 @@ def whoami():
         return jsonify({"error": "Not logged in"}), 401
     return jsonify({"username": username})
 
+
+
 @app.route('/search-page')
 def search_page():
-    return render_template('search.html')
+    return render_template('search.html')  # Make sure 'search.html' exists in your 'templates' folder
 
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'xls', 'xlsx'}
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-
 USER_FILE = 'users.json'
+
+
 
 def load_users():
     if os.path.exists(USER_FILE):
@@ -108,7 +133,6 @@ def load_users():
             print("⚠️ Warning: users.json is corrupted. Reinitializing.")
             return {}
     return {}
-
 
 def save_users(users):
     with open(USER_FILE, 'w') as f:
@@ -146,7 +170,6 @@ def search_item_in_excel(item_name, selected_file):
     except Exception as e:
         return {"error": f"Failed to read file: {str(e)}"}
 
-
 # Route to handle the search request
 @app.route('/search', methods=['POST'])
 def search_item():
@@ -169,5 +192,7 @@ def search_item():
 
     return jsonify({"error": "Invalid file format"}), 400
 
-if __name__ == "__main__":
-    app.run(debug=True)
+if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 8080))  # Use PORT environment variable or default to 8080
+    app.run(host='0.0.0.0', port=port)
+
